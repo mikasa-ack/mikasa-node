@@ -1,52 +1,116 @@
-# Autonomous smart contracts enabled subtrate node
+# Frontier
 
-## Architecture
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/paritytech/frontier/rust.yml)](https://github.com/paritytech/frontier/actions)
+[![Matrix](https://img.shields.io/matrix/frontier:matrix.org)](https://matrix.to/#/#frontier:matrix.org)
 
-![Architecture](docs/img/mikasa-node-architecture.png)
+Frontier is Substrate's Ethereum compatibility layer. It allows you to run
+unmodified Ethereum dapps.
 
-## Flow
+The goal of Ethereum compatibility layer is to be able to:
 
-### Register an autonomous smart contract
+* Run a normal web3 application via the compatibility layer, using local nodes,
+  where an extra bridge binary is acceptable.
+* Be able to import state from Ethereum mainnet.
 
-1. User creates a smart contract and deploys it to the blockchain.
-2. User registers the smart contract with the node using `register_async_message` extrinsic.
+## Releases
 
-![Architecture](docs/img/register-asc.png)
+### Primitives
 
-### Autonomous smart contract execution
+Those are suitable to be included in a runtime. Primitives are structures shared
+by higher-level code.
 
-1. The node periodically checks the registered smart contracts and executes them. The execution of this check is done with `on_initialize` hook.
-2. The node checks if the smart contract is ready to be executed. If it is, the node executes the smart contract and updates the state of the smart contract.
-3. The node checks if the autonomous smart contract should be removed from the pool. If it should, the node removes the smart contract from the pool.
+* `fp-consensus`: Consensus layer primitives.
+  ![Crates.io](https://img.shields.io/crates/v/fp-consensus)
+* `fp-evm`: EVM primitives. ![Crates.io](https://img.shields.io/crates/v/fp-evm)
+* `fp-rpc`: RPC primitives. ![Crates.io](https://img.shields.io/crates/v/fp-rpc)
+* `fp-storage`: Well-known storage information.
+  ![Crates.io](https://img.shields.io/crates/v/fp-storage)
 
-![Architecture](docs/img/autonomous-smart-contract-execution-sequence-diagram.png)
-### Pre requisites
+### Pallets
 
-```sh
-sudo apt-get update && apt-get upgrade
-sudo apt install build-essential clang curl git make protobuf-compiler libprotobuf-dev
-```
-Install Rust
+Those pallets serve as runtime components for projects using Frontier.
 
-```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup default stable
-rustup update
-rustup update nightly
-rustup target add wasm32-unknown-unknown --toolchain nightly
-```
+* `pallet-evm`: EVM execution handling.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm)
+* `pallet-ethereum`: Ethereum block handling.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-ethereum)
+* `pallet-dynamic-fee`: Extends the fee handling logic so that it can be changed
+  within the runtime.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-dynamic-fee)
 
+### EVM Pallet precompiles
 
-### Build
+Those precompiles can be used together with `pallet-evm` for additional
+functionalities of the EVM executor.
 
-Use the following command to build the node without launching it:
+* `pallet-evm-precompile-simple`: Four basic precompiles in Ethereum EVMs.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-simple)
+* `pallet-evm-precompile-blake2`: BLAKE2 precompile.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-blake2)
+* `pallet-evm-precompile-bn128`: BN128 precompile.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-bn128)
+* `pallet-evm-precompile-ed25519`: ED25519 precompile.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-ed25519)
+* `pallet-evm-precompile-modexp`: MODEXP precompile.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-modexp)
+* `pallet-evm-precompile-sha3fips`: Standard SHA3 precompile.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-sha3fips)
+* `pallet-evm-precompile-dispatch`: Enable interoperability between EVM
+  contracts and other Substrate runtime components.
+  ![Crates.io](https://img.shields.io/crates/v/pallet-evm-precompile-dispatch)
 
-```sh
-cargo build --release
-```
+### Client-side libraries
 
-### Run
+Those are libraries that should be used on client-side to enable RPC, block hash
+mapping, and other features.
 
-```sh
-cargo run --release -- --dev
-```
+* `fc-consensus`: Consensus block import.
+  ![Crates.io](https://img.shields.io/crates/v/fc-consensus)
+* `fc-db`: Frontier-specific database backend.
+  ![Crates.io](https://img.shields.io/crates/v/fc-db)
+* `fc-mapping-sync`: Block hash mapping syncing logic.
+  ![Crates.io](https://img.shields.io/crates/v/fc-mapping-sync)
+* `fc-rpc-core`: Core RPC logic.
+  ![Crates.io](https://img.shields.io/crates/v/fc-rpc-core)
+* `fc-rpc`: RPC implementation.
+  ![Crates.io](https://img.shields.io/crates/v/fc-rpc)
+
+## Development workflow
+
+### Pull request
+
+All changes (except new releases) are handled through pull requests.
+
+### Versioning
+
+Frontier follows [Semantic Versioning](https://semver.org/). An unreleased crate
+in the repository will have the `-dev` suffix in the end, and we do rolling
+releases.
+
+When you make a pull request against this repository, please also update the
+affected crates' versions, using the following rules. Note that the rules should
+be applied recursively -- if a change modifies any upper crate's dependency
+(even just the `Cargo.toml` file), then the upper crate will also need to apply
+those rules.
+
+Additionally, if your change is notable, then you should also modify the
+corresponding `CHANGELOG.md` file, in the "Unreleased" section.
+
+If the affected crate already has `-dev` suffix:
+
+* If your change is a patch, then you do not have to update any versions.
+* If your change introduces a new feature, please check if the local version
+  already had its minor version bumped, if not, bump it.
+* If your change modifies the current interface, please check if the local
+  version already had its major version bumped, if not, bump it.
+
+If the affected crate does not yet have `-dev` suffix:
+
+* If your change is a patch, then bump the patch version, and add `-dev` suffix.
+* If your change introduces a new feature, then bump the minor version, and add
+  `-dev` suffix.
+* If your change modifies the current interface, then bump the major version,
+  and add `-dev` suffix.
+
+If your pull request introduces a new crate, please set its version to
+`1.0.0-dev`.
