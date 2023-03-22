@@ -1,5 +1,9 @@
 # Autonomous smart contracts enabled subtrate node
 
+## Architecture
+
+[![Architecture](docs/img/mikasa-node-architecture.png)
+
 ### Pre requisites
 
 ```sh
