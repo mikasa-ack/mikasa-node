@@ -1,10 +1,13 @@
 // @ts-nocheck
 const { ApiPromise, WsProvider } = require("@polkadot/api");
 import { ContractPromise } from "@polkadot/api-contract";
+import type { WeightV2 } from "@polkadot/types/interfaces";
+import { BN, BN_ONE } from "@polkadot/util";
 
 const { Keyring } = require("@polkadot/keyring");
 const util_crypto = require("@polkadot/util-crypto");
-
+const MAX_CALL_WEIGHT = new BN(5_000_000_000_000).isub(BN_ONE);
+const PROOFSIZE = new BN(1_000_000);
 main().catch((error) => {
   console.error(error);
   process.exit(-1);
@@ -26,8 +29,11 @@ async function main() {
   const metadata = require("./mikasa.json");
   const address = "5CA1V4NBFkiNfprx5bcTauNZemnseJCb7hntyzMDVzZ1xsVb";
   const contract = new ContractPromise(api, metadata, address);
-  const gasLimit = 3000n * 1000000n;
   const storageDepositLimit = null;
+  const gasLimit = api?.registry.createType("WeightV2", {
+    refTime: MAX_CALL_WEIGHT,
+    proofSize: PROOFSIZE,
+  }) as WeightV2;
 
   const options = {
     gasLimit,
@@ -35,7 +41,7 @@ async function main() {
   };
   // Query the contract
   const { gasRequired, storageDeposit, result, output } =
-    await contract.query.get(options);
+    await contract.query.get(alice.address, options);
 
   // The actual result from RPC as `ContractExecResult`
   console.log(result.toHuman());
