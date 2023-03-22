@@ -2,7 +2,7 @@
 
 ## Architecture
 
-[![Architecture](docs/img/mikasa-node-architecture.png)
+![Architecture](docs/img/mikasa-node-architecture.png)
 
 ### Pre requisites
 
