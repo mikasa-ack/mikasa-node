@@ -1,4 +1,4 @@
-# Autonomous smart contracts enable subtrate node
+# Autonomous smart contracts enabled subtrate node
 
 ### Build
 
