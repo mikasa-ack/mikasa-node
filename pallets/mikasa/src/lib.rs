@@ -86,33 +86,7 @@ pub mod pallet {
 
 		/// The block is being initialized. Implement to have something happen.
 		fn on_initialize(_: T::BlockNumber) -> Weight {
-			// Read the async message pool
-			let async_message_pool = AsyncMessagePool::<T>::get().unwrap_or_default();
-			// Iterate over the async message pool
-			for async_message in async_message_pool {
-				let target_contract =
-					Self::account_id32_to_account_id(async_message.target_contract);
-				log!(info, "Running autonomous call on contract {:?}.", target_contract.clone());
-				let sender = Self::account_id32_to_account_id(async_message.sender);
-				let value: BalanceOf<T> = Default::default();
-				let mut selector = async_message.target_selector.into_inner();
-				let mut data = Vec::new();
-
-				data.append(&mut selector);
-				// Call the contract
-				let _result = pallet_contracts::Pallet::<T>::bare_call(
-					sender,
-					target_contract.clone(),
-					value,
-					DEFAULT_GAS_LIMIT,
-					Self::storage_deposit_limit(),
-					data,
-					DEBUG,
-					DETERMINISM,
-				)
-				.result
-				.unwrap();
-			}
+			Self::process_async_message_pool();
 			Weight::zero()
 		}
 
@@ -215,6 +189,70 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Process the async message pool.
+		/// This function is called at the beginning of each block.
+		/// It iterates over the async message pool and executes the autonomous calls.
+		fn process_async_message_pool() {
+			// Read the async message pool
+			let async_message_pool = AsyncMessagePool::<T>::get().unwrap_or_default();
+			// Iterate over the async message pool
+			for async_message in async_message_pool {
+				Self::process_async_message(async_message);
+			}
+		}
+
+		/// Process an async message.
+		/// # Arguments
+		/// * `async_message` - The async message to process.
+		fn process_async_message(async_message: AsyncMessage) {
+			let target_contract = Self::account_id32_to_account_id(async_message.target_contract);
+			log!(info, "Running autonomous call on contract {:?}.", target_contract.clone());
+
+			let sender = Self::account_id32_to_account_id(async_message.sender);
+			let value: BalanceOf<T> = Default::default();
+			let mut selector = async_message.target_selector.into_inner();
+			let mut data = Vec::new();
+
+			data.append(&mut selector);
+			// Call the contract
+			let _result = pallet_contracts::Pallet::<T>::bare_call(
+				sender.clone(),
+				target_contract.clone(),
+				value,
+				DEFAULT_GAS_LIMIT,
+				Self::storage_deposit_limit(),
+				data,
+				DEBUG,
+				DETERMINISM,
+			)
+			.result
+			.unwrap();
+			// Check if the call should be killed
+			if let Some(should_kill_selector) = async_message.should_kill_selector {
+				let mut selector = should_kill_selector.into_inner();
+				let mut data = Vec::new();
+				data.append(&mut selector);
+				let result = pallet_contracts::Pallet::<T>::bare_call(
+					sender.clone(),
+					target_contract.clone(),
+					value,
+					DEFAULT_GAS_LIMIT,
+					Self::storage_deposit_limit(),
+					data,
+					DEBUG,
+					DETERMINISM,
+				)
+				.result
+				.unwrap();
+
+				let encoded_data = result.data;
+				let should_kill_result = bool::decode(&mut &encoded_data[..]).unwrap();
+				log!(info, "Result of should_kill_selector: {:?}", should_kill_result);
+			}
+			// Emit an event
+			Self::deposit_event(Event::AutonomousSmartContractCall(target_contract));
+		}
+
 		/// Convert AccountId32 to T::AccountId
 		/// # Arguments
 		/// * `account_id` - AccountId32
