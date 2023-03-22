@@ -15,3 +15,5 @@
 # direnv files
 .envrc
 .direnv
+
+**/node_modules/
