@@ -196,17 +196,17 @@ pub mod pallet {
 			// Read the async message pool
 			let async_message_pool = AsyncMessagePool::<T>::get().unwrap_or_default();
 			// Iterate over the async message pool
-			for async_message in async_message_pool {
-				Self::process_async_message(async_message);
+			for (index, async_message) in async_message_pool.iter().enumerate() {
+				Self::process_async_message(index, async_message.clone());
 			}
 		}
 
 		/// Process an async message.
 		/// # Arguments
 		/// * `async_message` - The async message to process.
-		fn process_async_message(async_message: AsyncMessage) {
+		fn process_async_message(index: usize, async_message: AsyncMessage) {
 			let target_contract = Self::account_id32_to_account_id(async_message.target_contract);
-			log!(info, "Running autonomous call on contract {:?}.", target_contract.clone());
+			log!(info, "Triggering autonomous call on contract {:?}.", target_contract.clone());
 
 			let sender = Self::account_id32_to_account_id(async_message.sender);
 			let value: BalanceOf<T> = Default::default();
@@ -214,6 +214,22 @@ pub mod pallet {
 			let mut data = Vec::new();
 
 			data.append(&mut selector);
+
+			// Check if the call should be run
+			if let Some(should_run_selector) = async_message.should_run_selector {
+				log!(info, "Checking if autonomous call should be run.");
+				let should_run = Self::call_and_get_bool(
+					sender.clone(),
+					target_contract.clone(),
+					should_run_selector.into_inner(),
+				);
+				if !should_run {
+					log!(info, "Autonomous call should not be run. Skipping.");
+					return
+				}
+				log!(info, "Autonomous call should be run. Executing.");
+			}
+
 			// Call the contract
 			let _result = pallet_contracts::Pallet::<T>::bare_call(
 				sender.clone(),
@@ -229,28 +245,57 @@ pub mod pallet {
 			.unwrap();
 			// Check if the call should be killed
 			if let Some(should_kill_selector) = async_message.should_kill_selector {
-				let mut selector = should_kill_selector.into_inner();
-				let mut data = Vec::new();
-				data.append(&mut selector);
-				let result = pallet_contracts::Pallet::<T>::bare_call(
+				let should_kill = Self::call_and_get_bool(
 					sender.clone(),
 					target_contract.clone(),
-					value,
-					DEFAULT_GAS_LIMIT,
-					Self::storage_deposit_limit(),
-					data,
-					DEBUG,
-					DETERMINISM,
-				)
-				.result
-				.unwrap();
-
-				let encoded_data = result.data;
-				let should_kill_result = bool::decode(&mut &encoded_data[..]).unwrap();
-				log!(info, "Result of should_kill_selector: {:?}", should_kill_result);
+					should_kill_selector.into_inner(),
+				);
+				if should_kill {
+					log!(info, "Autonomous call should be killed. Removing from pool.");
+					let mut async_message_pool = AsyncMessagePool::<T>::get().unwrap_or_default();
+					async_message_pool.remove(index);
+					AsyncMessagePool::<T>::set(Some(async_message_pool));
+				}
 			}
 			// Emit an event
 			Self::deposit_event(Event::AutonomousSmartContractCall(target_contract));
+		}
+
+		/// Call a target contract function and return the result as a boolean.
+		/// Assumes the selector actually matches a function that return a boolean.
+		/// # Arguments
+		/// - `who`: the account of the sender
+		/// - `destination_address`: the target address of the smart contract
+		/// - `selector`: the selector of the function to call.
+		fn call_and_get_bool(
+			who: T::AccountId,
+			destination_address: T::AccountId,
+			mut selector: Vec<u8>,
+		) -> bool {
+			let value: BalanceOf<T> = Default::default();
+			let mut data = Vec::new();
+			data.append(&mut selector);
+
+			// Do the actual call to the smart contract function
+			let result = pallet_contracts::Pallet::<T>::bare_call(
+				who,
+				destination_address.clone(),
+				value,
+				DEFAULT_GAS_LIMIT,
+				Self::storage_deposit_limit(),
+				data,
+				DEBUG,
+				DETERMINISM,
+			)
+			.result
+			.unwrap();
+
+			let encoded_data = result.data;
+
+			// For some reason the decoding as boolean does not work
+			// Let's just take the second byte and convert it to a boolean
+			//bool::decode(&mut &encoded_data[..]).unwrap()
+			encoded_data[1] != 0
 		}
 
 		/// Convert AccountId32 to T::AccountId
