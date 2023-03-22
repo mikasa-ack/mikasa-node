@@ -4,6 +4,15 @@
 
 ![Architecture](docs/img/mikasa-node-architecture.png)
 
+## Flow
+
+### Register an autonomous smart contract
+
+1. User creates a smart contract and deploys it to the blockchain.
+2. User registers the smart contract with the node using `register_async_message` extrinsic.
+
+![Architecture](docs/img/register-asc.png)
+
 ### Pre requisites
 
 ```sh
