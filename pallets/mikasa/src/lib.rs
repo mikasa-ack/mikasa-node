@@ -86,6 +86,33 @@ pub mod pallet {
 
 		/// The block is being initialized. Implement to have something happen.
 		fn on_initialize(_: T::BlockNumber) -> Weight {
+			// Read the async message pool
+			let async_message_pool = AsyncMessagePool::<T>::get().unwrap_or_default();
+			// Iterate over the async message pool
+			for async_message in async_message_pool {
+				let target_contract =
+					Self::account_id32_to_account_id(async_message.target_contract);
+				log!(info, "Running autonomous call on contract {:?}.", target_contract.clone());
+				let sender = Self::account_id32_to_account_id(async_message.sender);
+				let value: BalanceOf<T> = Default::default();
+				let mut selector = async_message.target_selector.into_inner();
+				let mut data = Vec::new();
+
+				data.append(&mut selector);
+				// Call the contract
+				let _result = pallet_contracts::Pallet::<T>::bare_call(
+					sender,
+					target_contract.clone(),
+					value,
+					DEFAULT_GAS_LIMIT,
+					Self::storage_deposit_limit(),
+					data,
+					DEBUG,
+					DETERMINISM,
+				)
+				.result
+				.unwrap();
+			}
 			Weight::zero()
 		}
 
